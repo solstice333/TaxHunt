@@ -9,16 +9,17 @@ from html.parser import HTMLParser
 from xml.dom.minidom import Node
 
 class TableParser(HTMLParser):
-   xhtml = { v: "&{};".format(k) 
+   entitydefs = { v: "&{};".format(k) 
       for k, v in html.entities.entitydefs.items()
-      if k in ['quot', 'amp', 'apos', 'lt', 'gt']}
+      if k in html.entities.entitydefs and k in html.entities.html5 }
 
    @staticmethod
    def _to_entity(match_obj):
       m = match_obj.group(0)
-      if TableParser.xhtml.get(m):
-         return "{}".format(TableParser.xhtml[m])
-      return m
+      try:
+         return "{}".format(TableParser.entitydefs[m])
+      except KeyError:
+         return m
 
    def __init__(self, *args, **kwargs):
       self._capture = False
