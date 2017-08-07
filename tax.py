@@ -10,7 +10,7 @@ from xml.dom.minidom import Node
 
 class TableParser(HTMLParser):
    xhtml = { v: "&{};".format(k) 
-      for k, v in html.entities.html5.items()
+      for k, v in html.entities.entitydefs.items()
       if k in ['quot', 'amp', 'apos', 'lt', 'gt']}
 
    @staticmethod
