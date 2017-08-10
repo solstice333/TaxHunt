@@ -74,7 +74,19 @@ class TaxTable:
 
    @property
    def columns(self):
-      return len(self._table.getElementsByTagName('th'))
+      return len(self._table.getElementsByTagName('th') or
+         self._table.getElementsByTagName('tr')[0].getElementsByTagName('td'))
+
+   @property
+   def title(self):
+      titles = self._table.getElementsByTagName('caption') or \
+         self._table.getElementsByTagName('thead')
+      return TaxTable._get_text_from_cell(titles[0])    
+
+   def is_taxable_income_related(self):
+      return bool(re.search(r'taxable.*income', self.title, re.I)) or \
+         bool(re.search('rates', self.title, re.I)) and \
+         bool(re.search('brackets', self.title, re.I))
 
    @property
    def data(self):
@@ -110,13 +122,18 @@ class TaxRequest:
    def tables(self):
       return [TaxTable(table) for table in self._tables]
 
+   @property
+   def taxable_income_tables(self):
+      return [table for table in self.tables 
+         if table.is_taxable_income_related()]
+
 class Taxable:
    def __init__(self, incomes):
       self._income = income   
 
 def main():
    req = TaxRequest(2017)
-   return req.tables
+   return req
 
 if __name__ == '__main__':
    main()
