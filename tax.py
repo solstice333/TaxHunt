@@ -112,7 +112,7 @@ class TaxTable:
    def _parse_table_max(self, data_row, *terms):
       bkt_idx = self._idx_search(*terms)
       bkt = data_row[bkt_idx].replace(',', '')
-      bkt = re.search(r'to \$(\d+(\.\d+)?)', bkt)
+      bkt = re.search(r'to \$?(\d+(\.\d+)?)', bkt)
       return float(bkt.group(1)) if bkt else None
 
    def _add_max_base(self, data):
@@ -172,16 +172,16 @@ class TaxTable:
 
       return datalist
 
-   # TODO
    @property
    def data_single_tax(self):
       data = []
       if self.is_taxable_income_related():
          if self._is_single_tax_column():
-            # for data_row in self.data:
-            #    data.append(
-            #       [self._parse_rate])
-            pass
+            for data_row in self.data:
+               data.append(
+                  [self._parse_table_rate(data_row, 'rate'),
+                  self._parse_table_min(data_row, 'single', 'filers'),
+                  self._parse_table_max(data_row, 'single', 'filers')])
          elif self._is_single_tax_table(): 
             for data_row in self.data:
                data.append(
