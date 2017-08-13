@@ -225,6 +225,18 @@ class Taxable:
    def __init__(self, incomes):
       self._income = income   
 
+def int_or_sci_notation(val):
+   try:
+      return int(val)
+   except ValueError as ve:
+      m = re.fullmatch(r'(\d+)e(\d+)$', val, re.I)
+      if m:
+         base = int(m.group(1))
+         for i in range(0, int(m.group(2))):
+            base *= 10
+         return base
+      raise ve
+
 def main():
    parser = ArgumentParser(description='a tool to help calculate taxes')
    parser.add_argument('-y', '--year', 
@@ -232,11 +244,16 @@ def main():
       choices=range(2014, time.localtime().tm_year + 1), 
       type=int, 
       help='the taxable year')
-   parser.add_argument('-i', '--incomes', type=int, help='the taxable year')
+   parser.add_argument('INCOMES', 
+      type=int_or_sci_notation,
+      nargs='+', 
+      help='list of incomes. Scientific notation, ' +\
+         'for instance, 10e3 is allowed')
    parser.add_argument('-m', '--married', action='store_true')
    args = parser.parse_args()
 
    req = TaxRequest(args.year)
+   print("incomes: {}".format(args.INCOMES))
    if args.married:
       print('married')
       raise RuntimeError('NotYetImplemented')
