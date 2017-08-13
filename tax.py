@@ -1,16 +1,21 @@
+from argparse import ArgumentParser
+from xml.parsers.expat import ExpatError
+from html.parser import HTMLParser
+from xml.dom.minidom import Node
+
 import math
 import re
 import urllib.request
 import xml.dom.minidom
 import xml.dom
 import html.entities
-from xml.parsers.expat import ExpatError
-from html.parser import HTMLParser
-from xml.dom.minidom import Node
+import time
+
 
 class NotTaxableIncomeRelatedError(Exception):
    def __init__(self):
       super().__init__()
+
 
 class TableParser(HTMLParser):
    entitydefs = { v: "&{};".format(k) 
@@ -61,6 +66,7 @@ class TableParser(HTMLParser):
          "<!DOCTYPE html>" + \
          "<html><body>" + self._data + "</body></html>"
       return self._data
+
 
 class TaxTable:
    @staticmethod
@@ -195,6 +201,7 @@ class TaxTable:
          raise NotTaxableIncomeRelatedError()
       return data
 
+
 class TaxRequest:
    def __init__(self, yr):
       self._url = "https://taxfoundation.org/{}-tax-brackets/".format(yr)
@@ -213,12 +220,29 @@ class TaxRequest:
       return [table for table in self.tables 
          if table.is_taxable_income_related()]
 
+
 class Taxable:
    def __init__(self, incomes):
       self._income = income   
 
 def main():
-   req = TaxRequest(2017)
+   parser = ArgumentParser(description='a tool to help calculate taxes')
+   parser.add_argument('-y', '--year', 
+      required=True, 
+      choices=range(2014, time.localtime().tm_year + 1), 
+      type=int, 
+      help='the taxable year')
+   parser.add_argument('-i', '--incomes', type=int, help='the taxable year')
+   parser.add_argument('-m', '--married', action='store_true')
+   args = parser.parse_args()
+
+   req = TaxRequest(args.year)
+   if args.married:
+      print('married')
+      raise RuntimeError('NotYetImplemented')
+   else:
+      print(req.taxable_income_tables[0].data_single_tax)
+
    return req
 
 if __name__ == '__main__':
