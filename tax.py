@@ -8,6 +8,10 @@ from xml.parsers.expat import ExpatError
 from html.parser import HTMLParser
 from xml.dom.minidom import Node
 
+class NotTaxableIncomeRelatedError(Exception):
+   def __init__(self):
+      super().__init__()
+
 class TableParser(HTMLParser):
    entitydefs = { v: "&{};".format(k) 
       for k, v in html.entities.entitydefs.items()
@@ -69,6 +73,61 @@ class TaxTable:
             s += TaxTable._get_text_from_cell(n)
       return s
 
+   def _is_single_tax_column(self):
+      return self.columns >= 4 and \
+         re.search(r'single', ''.join(self.headers), re.I)
+
+   def _is_single_tax_table(self):
+      return self.columns < 4 and \
+         not re.search(r'single', ''.join(self.headers), re.I)
+
+   def _idx_search(self, *terms):
+      idx = 0
+
+      for hdr in self.headers:
+         next_header = False
+
+         for term in terms:
+            if not re.search(re.escape(term), hdr, re.I):
+               next_header = True
+               break 
+
+         if next_header:
+            idx += 1
+            continue
+
+         return idx
+
+   def _parse_table_rate(self, data_row, *terms):
+      rate_idx = self._idx_search(*terms)
+      rate = re.search(r'(\d+(\.\d+)?)%', data_row[rate_idx])
+      return float(rate.group(1))/100
+
+   def _parse_table_min(self, data_row, *terms):
+      bkt_idx = self._idx_search(*terms)
+      bkt = data_row[bkt_idx].replace(',', '')
+      bkt = re.search(r'\$(\d+(\.\d+)?)', bkt)
+      return float(bkt.group(1))
+
+   def _parse_table_max(self, data_row, *terms):
+      bkt_idx = self._idx_search(*terms)
+      bkt = data_row[bkt_idx].replace(',', '')
+      bkt = re.search(r'to \$(\d+(\.\d+)?)', bkt)
+      return float(bkt.group(1)) if bkt else None
+
+   def _add_max_base(self, data):
+      for bkt in data:
+         if (bkt[2] is None):
+            bkt.append(None)
+         else:
+            bkt.append(bkt[0]*(bkt[2] - bkt[1]))
+      return data
+
+   @staticmethod
+   def _get_aggregated_base_below(data, bkt_idx):
+      return sum([bkt[3] for bkt in data[0:bkt_idx]])
+
+
    def __init__(self, table_elem):
       self._table = table_elem
 
@@ -83,6 +142,13 @@ class TaxTable:
          self._table.getElementsByTagName('thead')
       return TaxTable._get_text_from_cell(titles[0])    
 
+   @property
+   def headers(self):
+      headers = \
+         self._table.getElementsByTagName('thead')[0].\
+         getElementsByTagName('th')
+      return tuple([TaxTable._get_text_from_cell(th) for th in headers])
+
    def is_taxable_income_related(self):
       return bool(re.search(r'taxable.*income', self.title, re.I)) or \
          bool(re.search('rates', self.title, re.I)) and \
@@ -95,9 +161,6 @@ class TaxTable:
       cols = self.columns
       idx = 0
 
-      datalist.append(tuple([TaxTable._get_text_from_cell(n) 
-         for n in self._table.getElementsByTagName('th')]))
-
       tds = self._table.\
          getElementsByTagName('tbody')[0].getElementsByTagName('td')
       for n in tds: 
@@ -108,6 +171,29 @@ class TaxTable:
             data.clear()
 
       return datalist
+
+   # TODO
+   @property
+   def data_single_tax(self):
+      data = []
+      if self.is_taxable_income_related():
+         if self._is_single_tax_column():
+            # for data_row in self.data:
+            #    data.append(
+            #       [self._parse_rate])
+            pass
+         elif self._is_single_tax_table(): 
+            for data_row in self.data:
+               data.append(
+                  [self._parse_table_rate(data_row, 'rate'),
+                  self._parse_table_min(
+                     data_row, 'taxable', 'income', 'bracket'),
+                  self._parse_table_max(
+                     data_row, 'taxable', 'income', 'bracket')])
+         data = self._add_max_base(data)
+      else:
+         raise NotTaxableIncomeRelatedError()
+      return data
 
 class TaxRequest:
    def __init__(self, yr):
