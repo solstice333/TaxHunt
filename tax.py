@@ -201,6 +201,10 @@ class TaxTable:
          raise NotTaxableIncomeRelatedError()
       return data
 
+   def is_single_table(self):
+      return re.search(r'single', self.title, re.I) or \
+         re.search(r'single', ''.join(self.headers), re.I)
+
 
 class TaxRequest:
    def __init__(self, yr):
@@ -219,6 +223,12 @@ class TaxRequest:
    def taxable_income_tables(self):
       return [table for table in self.tables 
          if table.is_taxable_income_related()]
+
+   @property
+   def single_table(self):
+      for table in self.taxable_income_tables:
+         if table.is_single_table():
+            return table
 
 
 class Taxable:
@@ -259,7 +269,7 @@ def main():
       print('married')
       raise RuntimeError('NotYetImplemented')
    else:
-      print(req.taxable_income_tables[0].data_single_tax)
+      print(req.single_table.data_single_tax)
 
    return req
 
