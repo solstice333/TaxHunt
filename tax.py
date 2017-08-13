@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 from xml.parsers.expat import ExpatError
 from html.parser import HTMLParser
 from xml.dom.minidom import Node
+from collections import namedtuple
 
 import math
 import re
@@ -133,7 +134,6 @@ class TaxTable:
    def _get_aggregated_base_below(data, bkt_idx):
       return sum([bkt[3] for bkt in data[0:bkt_idx]])
 
-
    def __init__(self, table_elem):
       self._table = table_elem
 
@@ -181,6 +181,8 @@ class TaxTable:
    @property
    def data_single_tax(self):
       data = []
+      Bracket = namedtuple('Bracket', ['rate', 'min', 'max', 'max_owe'])
+
       if self.is_taxable_income_related():
          if self._is_single_tax_column():
             for data_row in self.data:
@@ -199,11 +201,11 @@ class TaxTable:
          data = self._add_max_base(data)
       else:
          raise NotTaxableIncomeRelatedError()
-      return data
+
+      return list(map(lambda d: Bracket(*d), data))
 
    def is_single_table(self):
-      return re.search(r'single', self.title, re.I) or \
-         re.search(r'single', ''.join(self.headers), re.I)
+      return self._is_single_tax_table() or self._is_single_tax_column()
 
 
 class TaxRequest:
@@ -232,8 +234,66 @@ class TaxRequest:
 
 
 class Taxable:
-   def __init__(self, incomes):
-      self._income = income   
+   def __init__(self, year, married, incomes):
+      self._incomes = incomes  
+      self._year = year
+      self._married = married
+
+   @property
+   def tax_owed(self):
+      req = TaxRequest(self._year)
+      tax_owed = []
+
+      for income in self._incomes:
+         if self._married:
+            print('married')
+            raise RuntimeError('NotYetImplemented')
+         else:
+            tax_data= \
+               [bkt for bkt in req.single_table.data_single_tax 
+                  if income > bkt.min]
+
+         owe = 0
+         for bkt in tax_data:
+            if income > bkt.max:
+               owe += bkt.max_owe
+            else:
+               owe += (income - bkt.min)*bkt.rate
+         tax_owed.append(owe)
+
+      return tax_owed
+
+   @property
+   def year(self):
+      return self._year
+
+   @year.setter
+   def year(self, yr):
+      self._year = yr
+
+   @property
+   def incomes(self):
+      return self._incomes
+
+   @incomes.setter
+   def incomes(self, incomes):
+      self._incomes = incomes
+
+   @property
+   def married(self):
+      return self._married
+
+   @married.setter
+   def married(self, married):
+      self._married = married
+
+   @property
+   def single(self):
+      return not self._married
+
+   @single.setter
+   def single(self, single):
+      self._married = not single
 
 def int_or_sci_notation(val):
    try:
@@ -248,7 +308,8 @@ def int_or_sci_notation(val):
       raise ve
 
 def main():
-   parser = ArgumentParser(description='a tool to help calculate taxes')
+   parser = ArgumentParser(description='a tool to help calculate taxes ' +
+      'by scraping data from taxfoundation.org')
    parser.add_argument('-y', '--year', 
       required=True, 
       choices=range(2014, time.localtime().tm_year + 1), 
@@ -263,15 +324,8 @@ def main():
    parser.add_argument('-m', '--married', action='store_true')
    args = parser.parse_args()
 
-   req = TaxRequest(args.year)
-   print("incomes: {}".format(args.INCOMES))
-   if args.married:
-      print('married')
-      raise RuntimeError('NotYetImplemented')
-   else:
-      print(req.single_table.data_single_tax)
-
-   return req
+   taxable = Taxable(args.year, args.married, args.INCOMES)
+   print(taxable.tax_owed)
 
 if __name__ == '__main__':
    main()
