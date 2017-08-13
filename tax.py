@@ -243,7 +243,8 @@ def main():
       required=True, 
       choices=range(2014, time.localtime().tm_year + 1), 
       type=int, 
-      help='the taxable year')
+      help='the taxable year',
+      metavar="{{ 2014 to {} inclusive }}".format(time.localtime().tm_year))
    parser.add_argument('INCOMES', 
       type=int_or_sci_notation,
       nargs='+', 
