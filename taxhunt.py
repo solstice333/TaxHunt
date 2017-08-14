@@ -290,6 +290,20 @@ class Taxable:
 
    @property
    def tax_owed(self):
+      """return tax owed for all values in the incomes list
+
+      >>> Taxable(2016, False, [49000]).tax_owed
+      [8021.25]
+
+      >>> Taxable(2016, True, [49000]).tax_owed
+      [6422.5]
+
+      >>> Taxable(2017, False, [49000]).tax_owed
+      [7988.75]
+
+      >>> Taxable(2017, True, [49000]).tax_owed
+      [6417.5]
+      """
       req = TaxRequest(self._year)
       tax_owed = []
 
