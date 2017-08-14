@@ -1,10 +1,11 @@
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from xml.parsers.expat import ExpatError
 from html.parser import HTMLParser
 from xml.dom.minidom import Node
 from collections import namedtuple
 from enum import Enum
 
+import argparse
 import math
 import re
 import urllib.request
@@ -357,8 +358,13 @@ def int_or_sci_notation(val):
       raise ve
 
 def main():
-   parser = ArgumentParser(description='a tool to help calculate taxes ' +
-      'by scraping data from taxfoundation.org')
+   parser = ArgumentParser(description="""\
+a tool to help calculate taxes by scraping data from taxfoundation.org
+
+Examples:
+   python taxhunt.py -y 2017 64e3 120e3
+   python taxhunt.py -y 2017 -m 225e3""",
+      formatter_class=RawDescriptionHelpFormatter)
    parser.add_argument('-y', '--year', 
       required=True, 
       choices=range(2014, time.localtime().tm_year + 1), 
