@@ -374,7 +374,7 @@ def main():
    args = parser.parse_args()
 
    taxable = Taxable(args.year, args.married, args.INCOMES)
-   print(taxable.tax_owed)
+   print(sum(taxable.tax_owed))
 
 if __name__ == '__main__':
    main()
