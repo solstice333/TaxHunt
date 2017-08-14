@@ -3,6 +3,7 @@ from xml.parsers.expat import ExpatError
 from html.parser import HTMLParser
 from xml.dom.minidom import Node
 from collections import namedtuple
+from enum import Enum
 
 import math
 import re
@@ -16,6 +17,11 @@ import time
 class NotTaxableIncomeRelatedError(Exception):
    def __init__(self):
       super().__init__()
+
+
+class FilerType(Enum):
+   SINGLE = 'single'
+   MARRIED = 'married'
 
 
 class TableParser(HTMLParser):
@@ -70,6 +76,9 @@ class TableParser(HTMLParser):
 
 
 class TaxTable:
+   _Bracket = namedtuple('Bracket', ['rate', 'min', 'max', 'max_owe'])
+   _FilerMethod = namedtuple('FilerMethod', ['has_col', 'is_table'])
+
    @staticmethod
    def _get_text_from_cell(node):
       s = ''
@@ -80,13 +89,31 @@ class TaxTable:
             s += TaxTable._get_text_from_cell(n)
       return s
 
-   def _is_single_tax_column(self):
+   @staticmethod
+   def _get_aggregated_base_below(data, bkt_idx):
+      return sum([bkt[3] for bkt in data[0:bkt_idx]])
+
+   def _has_tax_column(self, filertype):
       return self.columns >= 4 and \
-         re.search(r'single', ''.join(self.headers), re.I)
+         re.search(re.escape(filertype.value), ''.join(self.headers), re.I)
+
+   def _is_tax_table(self, filertype):
+      return self.columns < 4 and \
+         not re.search(re.escape(filertype.value), 
+            ''.join(self.headers), re.I) and \
+         re.search(re.escape(filertype.value), self.title, re.I)
+
+   def _has_single_tax_column(self):
+      return self._has_tax_column(FilerType.SINGLE)
 
    def _is_single_tax_table(self):
-      return self.columns < 4 and \
-         not re.search(r'single', ''.join(self.headers), re.I)
+      return self._is_tax_table(FilerType.SINGLE)
+
+   def _has_married_tax_column(self):
+      return self._has_tax_column(FilerType.MARRIED)
+
+   def _is_married_tax_table(self):
+      return self._is_tax_table(FilerType.MARRIED)
 
    def _idx_search(self, *terms):
       idx = 0
@@ -130,9 +157,15 @@ class TaxTable:
             bkt.append(bkt[0]*(bkt[2] - bkt[1]))
       return data
 
-   @staticmethod
-   def _get_aggregated_base_below(data, bkt_idx):
-      return sum([bkt[3] for bkt in data[0:bkt_idx]])
+   @property
+   def _col_table_meths(self):
+      return {
+         FilerType.SINGLE: 
+            TaxTable._FilerMethod(
+               self._has_single_tax_column, self._is_single_tax_table),
+         FilerType.MARRIED: 
+            TaxTable._FilerMethod(
+               self._has_married_tax_column, self._is_married_tax_table) }
 
    def __init__(self, table_elem):
       self._table = table_elem
@@ -180,17 +213,29 @@ class TaxTable:
 
    @property
    def data_single_tax(self):
+      return self.tax_data(FilerType.SINGLE)
+
+   @property
+   def data_married_tax(self):
+      return self.tax_data(FilerType.MARRIED)
+
+   def is_single_table(self):
+      return self._is_single_tax_table() or self._has_single_tax_column()
+
+   def is_married_table(self):
+      return self._is_married_tax_table() or self._has_married_tax_column() 
+
+   def tax_data(self, filer_type):
       data = []
-      Bracket = namedtuple('Bracket', ['rate', 'min', 'max', 'max_owe'])
 
       if self.is_taxable_income_related():
-         if self._is_single_tax_column():
+         if self._col_table_meths[filer_type].has_col():
             for data_row in self.data:
                data.append(
                   [self._parse_table_rate(data_row, 'rate'),
-                  self._parse_table_min(data_row, 'single', 'filers'),
-                  self._parse_table_max(data_row, 'single', 'filers')])
-         elif self._is_single_tax_table(): 
+                  self._parse_table_min(data_row, filer_type.value, 'filers'),
+                  self._parse_table_max(data_row, filer_type.value, 'filers')])
+         elif self._col_table_meths[filer_type].is_table():
             for data_row in self.data:
                data.append(
                   [self._parse_table_rate(data_row, 'rate'),
@@ -202,10 +247,7 @@ class TaxTable:
       else:
          raise NotTaxableIncomeRelatedError()
 
-      return list(map(lambda d: Bracket(*d), data))
-
-   def is_single_table(self):
-      return self._is_single_tax_table() or self._is_single_tax_column()
+      return list(map(lambda d: TaxTable._Bracket(*d), data))
 
 
 class TaxRequest:
@@ -232,6 +274,12 @@ class TaxRequest:
          if table.is_single_table():
             return table
 
+   @property
+   def married_table(self):
+      for table in self.taxable_income_tables:
+         if table.is_married_table():
+            return table
+
 
 class Taxable:
    def __init__(self, year, married, incomes):
@@ -246,10 +294,11 @@ class Taxable:
 
       for income in self._incomes:
          if self._married:
-            print('married')
-            raise RuntimeError('NotYetImplemented')
+            tax_data = \
+               [bkt for bkt in req.married_table.data_married_tax
+                  if income > bkt.min]
          else:
-            tax_data= \
+            tax_data = \
                [bkt for bkt in req.single_table.data_single_tax 
                   if income > bkt.min]
 
